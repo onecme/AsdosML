@@ -140,21 +140,50 @@ st.markdown("# 🏠 Prediksi Harga Rumah Tangerang")
 st.markdown("Estimasi harga properti berbasis machine learning dengan analisis visual lengkap.")
 st.markdown("---")
 
-if not predict_clicked:
+# ── Session state: simpan hasil prediksi agar tidak hilang saat re-run ────────
+if predict_clicked:
+    district_encoded = district_mean_price[district]
+    input_data = np.array([[
+        facilities, bedrooms, bathrooms, land_size, building_size,
+        carports, electricity, maid_bedrooms, maid_bathrooms,
+        floors, property_condition, garages, furnishing, district_encoded
+    ]])
+    st.session_state["prediction"] = model.predict(input_data)[0]
+    st.session_state["inputs"] = {
+        "district": district, "facilities": facilities, "bedrooms": bedrooms,
+        "bathrooms": bathrooms, "land_size": land_size, "building_size": building_size,
+        "carports": carports, "electricity": electricity, "maid_bedrooms": maid_bedrooms,
+        "maid_bathrooms": maid_bathrooms, "floors": floors,
+        "property_condition": property_condition, "garages": garages,
+        "furnishing": furnishing, "district_encoded": float(district_encoded)
+    }
+    st.session_state["ai_analysis"] = None  # reset analisis lama
+
+if "prediction" not in st.session_state:
     st.info("👈 Isi detail properti di sidebar, lalu klik **Prediksi Harga**.")
     st.stop()
 
-# ── Predict ──────────────────────────────────────────────────────────────────
-district_encoded = district_mean_price[district]
-input_data = np.array([[
-    facilities, bedrooms, bathrooms, land_size, building_size,
-    carports, electricity, maid_bedrooms, maid_bathrooms,
-    floors, property_condition, garages, furnishing, district_encoded
-]])
-prediction = model.predict(input_data)[0]
+# Ambil dari session state
+prediction    = st.session_state["prediction"]
+inp           = st.session_state["inputs"]
+district      = inp["district"]
+facilities    = inp["facilities"]
+bedrooms      = inp["bedrooms"]
+bathrooms     = inp["bathrooms"]
+land_size     = inp["land_size"]
+building_size = inp["building_size"]
+carports      = inp["carports"]
+electricity   = inp["electricity"]
+maid_bedrooms = inp["maid_bedrooms"]
+maid_bathrooms= inp["maid_bathrooms"]
+floors        = inp["floors"]
+property_condition = inp["property_condition"]
+garages       = inp["garages"]
+furnishing    = inp["furnishing"]
+district_encoded   = inp["district_encoded"]
 
 # Helper prices
-price_B = prediction / 1e9       # milyar
+price_B        = prediction / 1e9
 price_per_land = prediction / land_size if land_size > 0 else 0
 price_per_bldg = prediction / building_size if building_size > 0 else 0
 
@@ -468,23 +497,28 @@ if analyze_clicked:
                     temperature=0.7,
                     max_tokens=1024,
                 )
-                analysis = response.choices[0].message.content
-
-            st.markdown("""
-            <div style="background:white; border-radius:16px; padding:1.6rem 2rem;
-                        box-shadow:0 1px 4px rgba(0,0,0,.07); border-left:4px solid #8B5CF6;
-                        margin-top:0.5rem; line-height:1.8; color:#1A1F36;">
-            """ + analysis.replace("\n", "<br>") + """
-            </div>
-            """, unsafe_allow_html=True)
-
-            # Info model yang dipakai
-            st.caption(f"Dianalisis oleh: {groq_model} via Groq · {response.usage.total_tokens} tokens digunakan")
+                st.session_state["ai_analysis"] = {
+                    "text": response.choices[0].message.content,
+                    "model": groq_model,
+                    "tokens": response.usage.total_tokens
+                }
 
         except ImportError:
-            st.error("Package `groq` belum terinstall. Jalankan: `pip install groq`")
+            st.error("Package `groq` belum terinstall. Tambahkan `groq` di packages.txt")
         except Exception as e:
             st.error(f"Error: {str(e)}")
+
+# Tampilkan hasil analisis dari session_state (tetap ada meski re-run)
+if st.session_state.get("ai_analysis"):
+    result = st.session_state["ai_analysis"]
+    st.markdown("""
+    <div style="background:white; border-radius:16px; padding:1.6rem 2rem;
+                box-shadow:0 1px 4px rgba(0,0,0,.07); border-left:4px solid #8B5CF6;
+                margin-top:0.5rem; line-height:1.8; color:#1A1F36;">
+    """ + result["text"].replace("\n", "<br>") + """
+    </div>
+    """, unsafe_allow_html=True)
+    st.caption(f"Dianalisis oleh: {result['model']} via Groq · {result['tokens']} tokens digunakan")
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("---")
