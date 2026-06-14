@@ -16,9 +16,62 @@ st.markdown("""
 <style>
     [data-testid="stAppViewContainer"] { background: #F7F8FC; }
     [data-testid="stSidebar"] { background: #1A1F36; }
+
+    /* Semua teks di sidebar */
     [data-testid="stSidebar"] * { color: #E2E8F0 !important; }
+
+    /* Label field */
+    [data-testid="stSidebar"] label,
     [data-testid="stSidebar"] .stSelectbox label,
-    [data-testid="stSidebar"] .stNumberInput label { color: #94A3B8 !important; font-size: 0.78rem !important; }
+    [data-testid="stSidebar"] .stNumberInput label {
+        color: #94A3B8 !important;
+        font-size: 0.78rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.03em !important;
+    }
+
+    /* Input number & select box background + text */
+    [data-testid="stSidebar"] input,
+    [data-testid="stSidebar"] select,
+    [data-testid="stSidebar"] textarea {
+        background: #2D3452 !important;
+        color: #F1F5F9 !important;
+        border: 1px solid #3D4572 !important;
+        border-radius: 8px !important;
+        font-size: 0.95rem !important;
+    }
+
+    /* Selectbox dropdown wrapper */
+    [data-testid="stSidebar"] [data-baseweb="select"] > div {
+        background: #2D3452 !important;
+        border: 1px solid #3D4572 !important;
+        border-radius: 8px !important;
+        color: #F1F5F9 !important;
+    }
+
+    /* Teks value di dalam selectbox */
+    [data-testid="stSidebar"] [data-baseweb="select"] span,
+    [data-testid="stSidebar"] [data-baseweb="select"] div {
+        color: #F1F5F9 !important;
+    }
+
+    /* Tombol +/- number input */
+    [data-testid="stSidebar"] button[kind="secondary"],
+    [data-testid="stSidebar"] [data-testid="stNumberInput"] button {
+        background: #3D4572 !important;
+        color: #E2E8F0 !important;
+        border: none !important;
+        border-radius: 6px !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stNumberInput"] button:hover {
+        background: #6366F1 !important;
+    }
+
+    /* Placeholder text */
+    [data-testid="stSidebar"] input::placeholder { color: #64748B !important; }
+
+    /* Divider */
+    [data-testid="stSidebar"] hr { border-color: #2D3452 !important; }
     .metric-card {
         background: white;
         border-radius: 16px;
