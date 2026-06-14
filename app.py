@@ -1,117 +1,327 @@
 import streamlit as st
 import joblib
 import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
 
-# Load model & encoder
-model = joblib.load('model.pkl')
-district_mean_price = joblib.load('district_mean_price.pkl')
-
-st.title("🏠 Prediksi Harga Rumah Tangerang")
-
-st.sidebar.header("Input Properti")
-
-# ========================
-# INPUT USER
-# ========================
-
-district = st.sidebar.selectbox(
-    "District", 
-    district_mean_price.index
+st.set_page_config(
+    page_title="Prediksi Harga Rumah Tangerang",
+    page_icon="🏠",
+    layout="wide"
 )
 
-facilities = st.sidebar.number_input(
-    "Jumlah Fasilitas", 0, 20, 5
-)
+# ── Custom CSS ──────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+    [data-testid="stAppViewContainer"] { background: #F7F8FC; }
+    [data-testid="stSidebar"] { background: #1A1F36; }
+    [data-testid="stSidebar"] * { color: #E2E8F0 !important; }
+    [data-testid="stSidebar"] .stSelectbox label,
+    [data-testid="stSidebar"] .stNumberInput label { color: #94A3B8 !important; font-size: 0.78rem !important; }
+    .metric-card {
+        background: white;
+        border-radius: 16px;
+        padding: 1.4rem 1.6rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,.07);
+        border-left: 4px solid #6366F1;
+        margin-bottom: 1rem;
+    }
+    .metric-label { color: #64748B; font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+    .metric-value { color: #1A1F36; font-size: 1.7rem; font-weight: 700; line-height: 1.2; }
+    .metric-sub { color: #94A3B8; font-size: 0.82rem; margin-top: 2px; }
+    .section-title { color: #1A1F36; font-size: 1.05rem; font-weight: 700; margin: 1.5rem 0 0.7rem; }
+    .predict-btn > button {
+        background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%) !important;
+        color: white !important; border-radius: 12px !important;
+        font-weight: 600 !important; font-size: 1rem !important;
+        padding: 0.65rem 2rem !important; border: none !important;
+        width: 100%; margin-top: 1rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-bedrooms = st.sidebar.number_input(
-    "Bedrooms", 0, 10, 3
-)
+# ── Load artifacts ───────────────────────────────────────────────────────────
+@st.cache_resource
+def load_artifacts():
+    model = joblib.load('model.pkl')
+    district_mean_price = joblib.load('district_mean_price.pkl')
+    return model, district_mean_price
 
-bathrooms = st.sidebar.number_input(
-    "Bathrooms", 0, 10, 2
-)
+model, district_mean_price = load_artifacts()
 
-land_size = st.sidebar.number_input(
-    "Land Size (m²)", 30, 1000, 120
-)
+# ── Sidebar ──────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("## 🏠 Input Properti")
+    st.markdown("---")
 
-building_size = st.sidebar.number_input(
-    "Building Size (m²)", 30, 1000, 90
-)
+    district = st.selectbox("District", district_mean_price.index)
+    facilities = st.number_input("Jumlah Fasilitas", 0, 20, 5)
+    bedrooms = st.number_input("Bedrooms", 0, 10, 3)
+    bathrooms = st.number_input("Bathrooms", 0, 10, 2)
+    land_size = st.number_input("Land Size (m²)", 30, 1000, 120)
+    building_size = st.number_input("Building Size (m²)", 30, 1000, 90)
+    carports = st.number_input("Carports", 0, 5, 1)
+    electricity = st.number_input("Electricity (VA)", 900, 10000, 2200)
+    maid_bedrooms = st.number_input("Maid Bedrooms", 0, 3, 0)
+    maid_bathrooms = st.number_input("Maid Bathrooms", 0, 3, 0)
+    floors = st.number_input("Floors", 1, 5, 1)
+    property_condition = st.selectbox(
+        "Kondisi Properti",
+        options=[0, 1, 2, 3, 4],
+        format_func=lambda x: ["Butuh Renovasi","Bagus","Bagus Sekali","Sudah Renovasi","Baru"][x]
+    )
+    garages = st.number_input("Garages", 0, 5, 0)
+    furnishing = st.selectbox(
+        "Furnishing",
+        options=[0, 1, 2],
+        format_func=lambda x: ["Unfurnished","Semi Furnished","Furnished"][x]
+    )
 
-carports = st.sidebar.number_input(
-    "Carports", 0, 5, 1
-)
+    st.markdown('<div class="predict-btn">', unsafe_allow_html=True)
+    predict_clicked = st.button("🔍 Prediksi Harga", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-electricity = st.sidebar.number_input(
-    "Electricity (VA)", 900, 10000, 2200
-)
+# ── Main area header ─────────────────────────────────────────────────────────
+st.markdown("# 🏠 Prediksi Harga Rumah Tangerang")
+st.markdown("Estimasi harga properti berbasis machine learning dengan analisis visual lengkap.")
+st.markdown("---")
 
-maid_bedrooms = st.sidebar.number_input(
-    "Maid Bedrooms", 0, 3, 0
-)
+if not predict_clicked:
+    st.info("👈 Isi detail properti di sidebar, lalu klik **Prediksi Harga**.")
+    st.stop()
 
-maid_bathrooms = st.sidebar.number_input(
-    "Maid Bathrooms", 0, 3, 0
-)
-
-floors = st.sidebar.number_input(
-    "Floors", 1, 5, 1
-)
-
-property_condition = st.sidebar.selectbox(
-    "Condition",
-    options=[0, 1, 2, 3, 4],
-    format_func=lambda x: [
-        "Butuh Renovasi",
-        "Bagus",
-        "Bagus Sekali",
-        "Sudah Renovasi",
-        "Baru"
-    ][x]
-)
-
-garages = st.sidebar.number_input(
-    "Garages", 0, 5, 0
-)
-
-furnishing = st.sidebar.selectbox(
-    "Furnishing",
-    options=[0, 1, 2],
-    format_func=lambda x: [
-        "Unfurnished",
-        "Semi Furnished",
-        "Furnished"
-    ][x]
-)
-
+# ── Predict ──────────────────────────────────────────────────────────────────
 district_encoded = district_mean_price[district]
-
-# ========================
-# URUTAN INPUT SESUAI MODEL
-# ========================
-
 input_data = np.array([[
-    facilities,          # 0
-    bedrooms,            # 1
-    bathrooms,           # 2
-    land_size,           # 3
-    building_size,       # 4
-    carports,            # 5
-    electricity,         # 6
-    maid_bedrooms,       # 7
-    maid_bathrooms,      # 8
-    floors,              # 9
-    property_condition,  # 10
-    garages,             # 11
-    furnishing,          # 12
-    district_encoded     # 13
+    facilities, bedrooms, bathrooms, land_size, building_size,
+    carports, electricity, maid_bedrooms, maid_bathrooms,
+    floors, property_condition, garages, furnishing, district_encoded
 ]])
+prediction = model.predict(input_data)[0]
 
-# ========================
-# PREDIKSI
-# ========================
+# Helper prices
+price_B = prediction / 1e9       # milyar
+price_per_land = prediction / land_size if land_size > 0 else 0
+price_per_bldg = prediction / building_size if building_size > 0 else 0
 
-if st.button("Prediksi Harga"):
-    prediction = model.predict(input_data)[0]
-    st.success(f"💰 Perkiraan Harga Rumah: Rp {prediction:,.0f}")
+# ── Row 1: Metric cards ───────────────────────────────────────────────────────
+c1, c2, c3 = st.columns(3)
+with c1:
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-label">Estimasi Harga</div>
+        <div class="metric-value">Rp {price_B:.2f} M</div>
+        <div class="metric-sub">Rp {prediction:,.0f}</div>
+    </div>""", unsafe_allow_html=True)
+with c2:
+    st.markdown(f"""
+    <div class="metric-card" style="border-color:#10B981">
+        <div class="metric-label">Harga / m² Tanah</div>
+        <div class="metric-value">Rp {price_per_land/1e6:.1f} Jt</div>
+        <div class="metric-sub">per meter persegi lahan</div>
+    </div>""", unsafe_allow_html=True)
+with c3:
+    st.markdown(f"""
+    <div class="metric-card" style="border-color:#F59E0B">
+        <div class="metric-label">Harga / m² Bangunan</div>
+        <div class="metric-value">Rp {price_per_bldg/1e6:.1f} Jt</div>
+        <div class="metric-sub">per meter persegi bangunan</div>
+    </div>""", unsafe_allow_html=True)
+
+# ── Row 2: Gauge + Radar ──────────────────────────────────────────────────────
+st.markdown('<p class="section-title">📊 Visualisasi Harga & Profil Properti</p>', unsafe_allow_html=True)
+col_g, col_r = st.columns(2)
+
+with col_g:
+    # Price gauge
+    min_p, max_p = 300e6, 10e9
+    gauge_val = min(max(prediction, min_p), max_p)
+    fig_gauge = go.Figure(go.Indicator(
+        mode="gauge+number+delta",
+        value=prediction / 1e9,
+        number={"suffix": " M", "valueformat": ".2f", "font": {"size": 28, "color": "#1A1F36"}},
+        delta={"reference": district_mean_price.mean() / 1e9, "valueformat": ".2f",
+               "suffix": " M", "relative": False},
+        title={"text": "Estimasi Harga (Milyar Rp)", "font": {"size": 13, "color": "#64748B"}},
+        gauge={
+            "axis": {"range": [min_p/1e9, max_p/1e9], "tickformat": ".1f",
+                     "ticksuffix": "M", "tickfont": {"size": 10}},
+            "bar": {"color": "#6366F1", "thickness": 0.3},
+            "bgcolor": "#F1F5F9",
+            "steps": [
+                {"range": [0.3, 2], "color": "#DCFCE7"},
+                {"range": [2, 5], "color": "#FEF9C3"},
+                {"range": [5, 10], "color": "#FEE2E2"},
+            ],
+            "threshold": {
+                "line": {"color": "#6366F1", "width": 3},
+                "thickness": 0.75,
+                "value": prediction / 1e9
+            }
+        }
+    ))
+    fig_gauge.update_layout(height=280, margin=dict(t=40, b=10, l=20, r=20),
+                            paper_bgcolor="white", plot_bgcolor="white")
+    st.plotly_chart(fig_gauge, use_container_width=True)
+
+with col_r:
+    # Radar / spider chart
+    cond_label = ["Butuh Renovasi","Bagus","Bagus Sekali","Sudah Renovasi","Baru"][property_condition]
+    furnish_label = ["Unfurnished","Semi Furnished","Furnished"][furnishing]
+
+    categories = ["Kamar Tidur","Kamar Mandi","Lahan","Bangunan","Fasilitas","Lantai"]
+    # normalize 0–10 scale
+    vals = [
+        min(bedrooms / 10 * 10, 10),
+        min(bathrooms / 10 * 10, 10),
+        min(land_size / 1000 * 10, 10),
+        min(building_size / 1000 * 10, 10),
+        min(facilities / 20 * 10, 10),
+        min(floors / 5 * 10, 10),
+    ]
+    fig_radar = go.Figure(go.Scatterpolar(
+        r=vals + [vals[0]],
+        theta=categories + [categories[0]],
+        fill='toself',
+        fillcolor='rgba(99,102,241,0.15)',
+        line=dict(color='#6366F1', width=2),
+        marker=dict(color='#6366F1', size=6)
+    ))
+    fig_radar.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 10], tickfont=dict(size=9)),
+            angularaxis=dict(tickfont=dict(size=11))
+        ),
+        title=dict(text="Profil Fitur Properti (skor 0–10)", font=dict(size=13, color="#64748B"), x=0.5),
+        height=280,
+        margin=dict(t=50, b=10, l=40, r=40),
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+        showlegend=False
+    )
+    st.plotly_chart(fig_radar, use_container_width=True)
+
+# ── Row 3: District comparison + Feature bar ──────────────────────────────────
+st.markdown('<p class="section-title">📍 Perbandingan Harga & Kontribusi Fitur</p>', unsafe_allow_html=True)
+col_d, col_f = st.columns(2)
+
+with col_d:
+    # Harga rata-rata tiap distrik vs prediksi
+    df_dist = pd.DataFrame({
+        "District": district_mean_price.index,
+        "Harga Rata-Rata (M)": district_mean_price.values / 1e9
+    }).sort_values("Harga Rata-Rata (M)", ascending=True)
+
+    colors = ["#6366F1" if d == district else "#CBD5E1" for d in df_dist["District"]]
+    fig_dist = go.Figure(go.Bar(
+        x=df_dist["Harga Rata-Rata (M)"],
+        y=df_dist["District"],
+        orientation="h",
+        marker_color=colors,
+        text=[f"{v:.1f}M" for v in df_dist["Harga Rata-Rata (M)"]],
+        textposition="outside",
+        textfont=dict(size=9)
+    ))
+    fig_dist.add_vline(
+        x=prediction / 1e9,
+        line_dash="dot", line_color="#F59E0B", line_width=2,
+        annotation_text=f"Prediksi: {price_B:.1f}M",
+        annotation_font_size=10,
+        annotation_font_color="#F59E0B"
+    )
+    fig_dist.update_layout(
+        title=dict(text="Rata-rata Harga per Distrik", font=dict(size=13, color="#64748B")),
+        xaxis_title="Milyar Rp",
+        height=max(300, len(district_mean_price) * 28),
+        margin=dict(t=40, b=30, l=10, r=60),
+        paper_bgcolor="white", plot_bgcolor="white",
+        xaxis=dict(gridcolor="#F1F5F9"),
+        yaxis=dict(gridcolor="#F1F5F9")
+    )
+    st.plotly_chart(fig_dist, use_container_width=True)
+
+with col_f:
+    # Feature contribution (value × coeff proxy via input values display)
+    feat_names = [
+        "Fasilitas","Bedrooms","Bathrooms","Land Size",
+        "Building Size","Carports","Electricity","Maid BR",
+        "Maid Bath","Floors","Kondisi","Garages","Furnishing","District"
+    ]
+    feat_values = [
+        facilities, bedrooms, bathrooms, land_size,
+        building_size, carports, electricity, maid_bedrooms,
+        maid_bathrooms, floors, property_condition, garages, furnishing, district_encoded
+    ]
+
+    # Normalise for display (0–100)
+    arr = np.array(feat_values, dtype=float)
+    arr_norm = (arr - arr.min()) / (arr.max() - arr.min() + 1e-9) * 100
+
+    df_feat = pd.DataFrame({"Fitur": feat_names, "Skor": arr_norm}) \
+                .sort_values("Skor", ascending=True)
+
+    fig_feat = go.Figure(go.Bar(
+        x=df_feat["Skor"],
+        y=df_feat["Fitur"],
+        orientation="h",
+        marker=dict(
+            color=df_feat["Skor"],
+            colorscale=[[0,"#E0E7FF"],[0.5,"#818CF8"],[1,"#4338CA"]],
+            showscale=False
+        ),
+        text=[f"{v:.0f}" for v in df_feat["Skor"]],
+        textposition="outside",
+        textfont=dict(size=9)
+    ))
+    fig_feat.update_layout(
+        title=dict(text="Nilai Relatif Tiap Fitur (input dinormalisasi)", font=dict(size=13, color="#64748B")),
+        xaxis_title="Skor Relatif (0–100)",
+        height=max(300, len(feat_names) * 22 + 80),
+        margin=dict(t=40, b=30, l=10, r=50),
+        paper_bgcolor="white", plot_bgcolor="white",
+        xaxis=dict(gridcolor="#F1F5F9"),
+        yaxis=dict(gridcolor="#F1F5F9")
+    )
+    st.plotly_chart(fig_feat, use_container_width=True)
+
+# ── Row 4: Price range simulation ─────────────────────────────────────────────
+st.markdown('<p class="section-title">📈 Simulasi Sensitivitas Harga vs Luas Tanah</p>', unsafe_allow_html=True)
+
+land_range = np.arange(30, 1001, 10)
+prices_sim = []
+for ls in land_range:
+    inp = np.array([[facilities, bedrooms, bathrooms, ls, building_size,
+                     carports, electricity, maid_bedrooms, maid_bathrooms,
+                     floors, property_condition, garages, furnishing, district_encoded]])
+    prices_sim.append(model.predict(inp)[0] / 1e9)
+
+fig_sim = go.Figure()
+fig_sim.add_trace(go.Scatter(
+    x=land_range, y=prices_sim,
+    mode="lines", line=dict(color="#6366F1", width=2.5),
+    fill="tozeroy", fillcolor="rgba(99,102,241,0.08)",
+    name="Estimasi Harga"
+))
+fig_sim.add_trace(go.Scatter(
+    x=[land_size], y=[prediction / 1e9],
+    mode="markers",
+    marker=dict(color="#F59E0B", size=12, symbol="circle",
+                line=dict(color="white", width=2)),
+    name=f"Properti Ini ({land_size}m²)"
+))
+fig_sim.update_layout(
+    xaxis_title="Luas Tanah (m²)",
+    yaxis_title="Estimasi Harga (Milyar Rp)",
+    height=300,
+    margin=dict(t=20, b=40, l=50, r=20),
+    paper_bgcolor="white", plot_bgcolor="white",
+    xaxis=dict(gridcolor="#F1F5F9"),
+    yaxis=dict(gridcolor="#F1F5F9"),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+)
+st.plotly_chart(fig_sim, use_container_width=True)
+
+# ── Footer ────────────────────────────────────────────────────────────────────
+st.markdown("---")
+st.caption("Model prediksi berbasis data properti Tangerang. Hasil bersifat estimasi dan dapat berbeda dengan harga pasar aktual.")
