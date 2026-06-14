@@ -295,45 +295,56 @@ with col_d:
     st.plotly_chart(fig_dist, use_container_width=True)
 
 with col_f:
-    # Feature contribution (value × coeff proxy via input values display)
+    # Sensitivitas fitur: naikan 1 satuan tiap fitur, hitung delta harga
+    base_input = [
+        facilities, bedrooms, bathrooms, land_size, building_size,
+        carports, electricity, maid_bedrooms, maid_bathrooms,
+        floors, property_condition, garages, furnishing, district_encoded
+    ]
     feat_names = [
-        "Fasilitas","Bedrooms","Bathrooms","Land Size",
-        "Building Size","Carports","Electricity","Maid BR",
-        "Maid Bath","Floors","Kondisi","Garages","Furnishing","District"
+        "Fasilitas","Bedrooms","Bathrooms","Land Size (m²)",
+        "Building Size (m²)","Carports","Electricity (VA)","Maid BR",
+        "Maid Bath","Floors","Kondisi Properti","Garages","Furnishing","—"
     ]
-    feat_values = [
-        facilities, bedrooms, bathrooms, land_size,
-        building_size, carports, electricity, maid_bedrooms,
-        maid_bathrooms, floors, property_condition, garages, furnishing, district_encoded
-    ]
+    # Kenaikan 1 satuan yang realistis per fitur
+    steps = [1, 1, 1, 10, 10, 1, 100, 1, 1, 1, 1, 1, 1, 0]
 
-    # Normalise for display (0–100)
-    arr = np.array(feat_values, dtype=float)
-    arr_norm = (arr - arr.min()) / (arr.max() - arr.min() + 1e-9) * 100
+    deltas = []
+    for i, step in enumerate(steps):
+        if step == 0:
+            deltas.append(0)
+            continue
+        modified = base_input.copy()
+        modified[i] = modified[i] + step
+        new_pred = model.predict(np.array([modified]))[0]
+        deltas.append((new_pred - prediction) / 1e6)  # dalam Juta Rp
 
-    df_feat = pd.DataFrame({"Fitur": feat_names, "Skor": arr_norm}) \
-                .sort_values("Skor", ascending=True)
+    df_sens = pd.DataFrame({
+        "Fitur": feat_names[:-1],  # exclude district
+        "Delta (Juta Rp)": deltas[:-1]
+    }).sort_values("Delta (Juta Rp)", ascending=True)
 
+    bar_colors = ["#10B981" if v >= 0 else "#EF4444" for v in df_sens["Delta (Juta Rp)"]]
     fig_feat = go.Figure(go.Bar(
-        x=df_feat["Skor"],
-        y=df_feat["Fitur"],
+        x=df_sens["Delta (Juta Rp)"],
+        y=df_sens["Fitur"],
         orientation="h",
-        marker=dict(
-            color=df_feat["Skor"],
-            colorscale=[[0,"#E0E7FF"],[0.5,"#818CF8"],[1,"#4338CA"]],
-            showscale=False
-        ),
-        text=[f"{v:.0f}" for v in df_feat["Skor"]],
+        marker_color=bar_colors,
+        text=[f"+{v:.1f}Jt" if v >= 0 else f"{v:.1f}Jt" for v in df_sens["Delta (Juta Rp)"]],
         textposition="outside",
         textfont=dict(size=9)
     ))
+    fig_feat.add_vline(x=0, line_color="#94A3B8", line_width=1)
     fig_feat.update_layout(
-        title=dict(text="Nilai Relatif Tiap Fitur (input dinormalisasi)", font=dict(size=13, color="#64748B")),
-        xaxis_title="Skor Relatif (0–100)",
-        height=max(300, len(feat_names) * 22 + 80),
-        margin=dict(t=40, b=30, l=10, r=50),
+        title=dict(
+            text="Dampak Kenaikan 1 Satuan per Fitur terhadap Harga",
+            font=dict(size=12, color="#64748B")
+        ),
+        xaxis_title="Perubahan Harga (Juta Rp)",
+        height=max(320, len(df_sens) * 24 + 80),
+        margin=dict(t=50, b=30, l=10, r=70),
         paper_bgcolor="white", plot_bgcolor="white",
-        xaxis=dict(gridcolor="#F1F5F9"),
+        xaxis=dict(gridcolor="#F1F5F9", zeroline=False),
         yaxis=dict(gridcolor="#F1F5F9")
     )
     st.plotly_chart(fig_feat, use_container_width=True)
